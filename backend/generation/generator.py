@@ -61,19 +61,17 @@ def _kick(dur: float = 0.25) -> np.ndarray:
     return np.sin(phase) * np.exp(-t * 12.0)
 
 
-def _snare(dur: float = 0.2) -> np.ndarray:
+def _snare(rng: np.random.Generator, dur: float = 0.2) -> np.ndarray:
     n = int(SR * dur)
     t = np.arange(n) / SR
-    rng = np.random.default_rng(7)
     noise = rng.standard_normal(n)
     tone = np.sin(2 * np.pi * 190.0 * t) * np.exp(-t * 25.0)
     return (0.6 * noise * np.exp(-t * 22.0) + 0.4 * tone).astype(np.float32)
 
 
-def _hat(dur: float = 0.06) -> np.ndarray:
+def _hat(rng: np.random.Generator, dur: float = 0.06) -> np.ndarray:
     n = int(SR * dur)
     t = np.arange(n) / SR
-    rng = np.random.default_rng(13)
     noise = rng.standard_normal(n)
     # crude highpass: differentiate
     hp = np.diff(noise, prepend=0.0)
@@ -114,12 +112,34 @@ def _bar_roots(melody: dict) -> list[int]:
     return [45, 43, 41, 43]  # A2 G2 F2 G2
 
 
-def render(melody: dict, style: str, bpm: int) -> np.ndarray:
+def _variation(rng: np.random.Generator, base: list[int], ghosts: list[int], max_add: int = 2) -> list[int]:
+    """Base pattern plus a seeded pick of ghost hits (sorted, deduped)."""
+    extra = [g for g in ghosts if g not in base and rng.random() < 0.5][:max_add]
+    return sorted(base + extra)
+
+
+def _write_wav(path: Path, audio: np.ndarray) -> None:
+    pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(pcm.tobytes())
+
+
+def _render_all(melody: dict, style: str, bpm: int, seed: int) -> tuple[np.ndarray, dict]:
+    """Render mix + per-bus stems. Stems share the mix normalization scale."""
     p = PRESETS[style]
+    rng = np.random.default_rng(seed)
+    kick = _variation(rng, p["kick"], [3, 6, 11, 14])
+    snare = _variation(rng, p["snare"], [7, 15], max_add=1)
+    hat = _variation(rng, p["hat"], [1, 3, 5, 7, 9, 11, 13, 15])
     beat = 60.0 / bpm
     step_dur = beat / 4.0
     total = int(SR * beat * BEATS_PER_BAR * BARS) + SR  # +1s tail
-    buf = np.zeros(total, dtype=np.float32)
+    drums = np.zeros(total, dtype=np.float32)
+    bass = np.zeros(total, dtype=np.float32)
+    pads = np.zeros(total, dtype=np.float32)
     roots = _bar_roots(melody)
     third = 3 if p["minor"] else 4
     bass_kind = "saw" if style in ("edm", "rock") else ("sine" if style == "ambient" else "square")
@@ -130,60 +150,79 @@ def render(melody: dict, style: str, bpm: int) -> np.ndarray:
         # --- pads: root + third + fifth, whole bar ---
         for iv in (0, third, 7):
             sig = _tone(_midi_to_freq(root + 12 + iv), BEATS_PER_BAR * beat, "sine", decay=1.2)
-            _add(buf, sig, int((bar_start) * SR), 0.22 * p["pad"])
+            _add(pads, sig, int((bar_start) * SR), 0.22 * p["pad"])
         # --- bass: root each beat (8ths for driving styles) ---
         bass_steps = [0, 2] if style in ("edm", "rock", "pop") else [0]
+        octave_up = rng.random() < 0.35  # per-bar variation: off-beats up an octave
         for b in range(BEATS_PER_BAR):
             for s in bass_steps:
                 at = bar_start + (b * 4 + s) * step_dur
-                sig = _tone(_midi_to_freq(root), step_dur * 3.5, bass_kind, decay=5.0)
-                _add(buf, sig, int(at * SR), 0.5 * p["bass"])
+                note = root + (12 if octave_up and s == 2 else 0)
+                sig = _tone(_midi_to_freq(note), step_dur * 3.5, bass_kind, decay=5.0)
+                _add(bass, sig, int(at * SR), 0.5 * p["bass"])
         # --- drums ---
         for s in range(STEPS_PER_BAR):
             at = bar_start + s * step_dur
             if s % 2 == 1:  # swing the off-16ths
                 at += p["swing"] * step_dur
             idx = int(at * SR)
-            if s in p["kick"]:
-                _add(buf, _kick(), idx, 0.9 * p["drums"])
-            if s in p["snare"]:
-                _add(buf, _snare(), idx, 0.7 * p["drums"])
-            if s in p["hat"]:
-                _add(buf, _hat(), idx, 0.35 * p["drums"])
-    # normalize + mood-agnostic soft clip
-    peak = float(np.max(np.abs(buf))) or 1.0
-    buf = np.tanh(buf / peak * 1.2) * 0.89
-    return buf
+            if s in kick:
+                _add(drums, _kick(), idx, 0.9 * p["drums"])
+            if s in snare:
+                _add(drums, _snare(rng), idx, 0.7 * p["drums"])
+            if s in hat:
+                _add(drums, _hat(rng), idx, 0.35 * p["drums"])
+    # normalize + mood-agnostic soft clip (stems share the mix scale)
+    raw = drums + bass + pads
+    peak = float(np.max(np.abs(raw))) or 1.0
+    scale = 0.89 / peak
+    mix = np.tanh(raw / peak * 1.2) * 0.89
+    return mix, {"drums": drums * scale, "bass": bass * scale, "pads": pads * scale}
 
 
-def generate_beat(melody: dict, style: str, tempo: int | None = None, mood: str = "chill") -> dict:
+def render(melody: dict, style: str, bpm: int, seed: int = 0) -> np.ndarray:
+    return _render_all(melody, style, bpm, seed)[0]
+
+
+def generate_beat(
+    melody: dict,
+    style: str,
+    tempo: int | None = None,
+    mood: str = "chill",
+    seed: int | None = None,
+    stems: bool = False,
+) -> dict:
     style = style.lower()
     if style not in SUPPORTED_STYLES:
         raise ValueError(f"unsupported style: {style}")
     bpm = int(tempo) if tempo else int(melody.get("tempo_bpm", 0) or PRESETS[style]["bpm"])
     bpm = max(60, min(180, bpm))
     gain = MOOD_GAIN.get((mood or "chill").lower(), 1.0)
+    seed = int(seed) & 0xFFFFFFFF if seed is not None else int(np.random.default_rng().integers(0, 2**31))
 
-    audio = render(melody, style, bpm) * gain
+    audio, stem_audio = _render_all(melody, style, bpm, seed)
+    audio = audio * gain
     peak = float(np.max(np.abs(audio))) or 1.0
     if peak > 0.99:
         audio = audio / peak * 0.89
 
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-    name = f"beat_{style.replace('/', '-')}_{bpm}_{uuid.uuid4().hex[:8]}.wav"
-    path = GENERATED_DIR / name
-    pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16)
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes(pcm.tobytes())
+    stem = f"beat_{style.replace('/', '-')}_{bpm}_{uuid.uuid4().hex[:8]}"
+    _write_wav(GENERATED_DIR / f"{stem}.wav", audio)
 
-    return {
+    resp = {
         "style": style,
         "tempo_bpm": bpm,
         "mood": mood,
+        "seed": seed,
         "tracks": ["drums", "bass", "chords", "melody"],
         "duration_s": round(len(audio) / SR, 2),
-        "audio_url": f"/api/audio/{name}",
+        "audio_url": f"/api/audio/{stem}.wav",
     }
+    if stems:
+        urls = {}
+        for name, sig in stem_audio.items():
+            _write_wav(GENERATED_DIR / f"{stem}_{name}.wav", sig * gain)
+            urls[name] = f"/api/audio/{stem}_{name}.wav"
+        resp["stems"] = urls
+    return resp

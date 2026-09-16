@@ -39,11 +39,13 @@ async def generate(
     style: str = Form("lo-fi"),
     tempo: int | None = Form(default=None),
     mood: str = Form(default="chill"),
+    seed: int | None = Form(default=None),
+    stems: bool = Form(default=False),
 ) -> dict:
     data = await file.read()
     try:
         melody = analyze_melody(data)
-        return generate_beat(melody, style, tempo, mood)
+        return generate_beat(melody, style, tempo, mood, seed, stems)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

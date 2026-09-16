@@ -7,8 +7,11 @@ const preview = $("preview"), beat = $("beat"), download = $("download");
 const chips = $("style"), tempo = $("tempo"), tempoVal = $("tempoVal"), mood = $("mood");
 const output = $("output"), banner = $("banner"), status = $("apiStatus");
 const resultCard = $("resultCard"), resultMeta = $("resultMeta"), recTimer = $("recTimer");
+const regenBtn = $("regenBtn"), versions = $("versions");
+const stemsBox = $("stems"), stemLinks = $("stemLinks");
 
-let blob = null, selectedStyle = null, timerId = null, timerStart = 0;
+let blob = null, lastWav = null, selectedStyle = null, timerId = null, timerStart = 0;
+let versionCount = 0;
 
 function showError(msg) {
   banner.textContent = msg;
@@ -89,6 +92,12 @@ stopBtn.onclick = async () => {
   recTimer.hidden = true;
   document.body.classList.remove("recording");
   preview.src = URL.createObjectURL(blob);
+  lastWav = null;
+  versionCount = 0;
+  versions.innerHTML = "";
+  stemLinks.innerHTML = "";
+  stemLinks.hidden = true;
+  resultCard.hidden = true;
   recordBtn.disabled = false;
   stopBtn.disabled = true;
   generateBtn.disabled = !blob;
@@ -96,17 +105,23 @@ stopBtn.onclick = async () => {
 
 tempo.oninput = () => { tempoVal.value = tempo.value; };
 
-generateBtn.onclick = async () => {
+generateBtn.onclick = () => requestBeat(null);
+regenBtn.onclick = () => requestBeat(Math.floor(Math.random() * 2 ** 31));
+
+async function requestBeat(seed) {
   clearError();
   document.body.classList.add("generating");
   generateBtn.disabled = true;
+  regenBtn.disabled = true;
   try {
-    const wav = await blobToWav(blob);
+    lastWav = lastWav && seed !== null ? lastWav : await blobToWav(blob);
     const fd = new FormData();
-    fd.append("file", wav, "hum.wav");
+    fd.append("file", lastWav, "hum.wav");
     fd.append("style", selectedStyle);
     fd.append("tempo", tempo.value);
     fd.append("mood", mood.value);
+    if (seed !== null) fd.append("seed", seed);
+    fd.append("stems", stemsBox.checked);
     let res;
     try {
       res = await fetch(`${API}/generate`, { method: "POST", body: fd });
@@ -120,16 +135,40 @@ generateBtn.onclick = async () => {
       showError(`Backend error: ${data.detail ?? res.status}`);
       return;
     }
+    versionCount += 1;
     const url = new URL(data.audio_url, `${API}/`).href;
-    resultMeta.textContent = `${data.style} · ${data.tempo_bpm} BPM · ${data.duration_s}s`;
+    resultMeta.textContent = `v${versionCount} · ${data.style} · ${data.tempo_bpm} BPM · ${data.duration_s}s · seed ${data.seed}`;
     beat.src = url;
     download.href = url;
+    download.download = `hummify-${data.style}-v${versionCount}.wav`;
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = url;
+    a.textContent = `v${versionCount} (${data.tempo_bpm} BPM, seed ${data.seed})`;
+    a.onclick = e => { e.preventDefault(); beat.src = url; beat.play(); };
+    li.appendChild(a);
+    versions.prepend(li);
+    stemLinks.innerHTML = "";
+    if (data.stems) {
+      for (const [name, href] of Object.entries(data.stems)) {
+        const s = document.createElement("a");
+        s.className = "chip stem";
+        s.href = new URL(href, `${API}/`).href;
+        s.textContent = `${name} WAV`;
+        s.download = `hummify-${data.style}-${name}-v${versionCount}.wav`;
+        stemLinks.appendChild(s);
+      }
+      stemLinks.hidden = false;
+    } else {
+      stemLinks.hidden = true;
+    }
     resultCard.hidden = false;
     resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } finally {
     document.body.classList.remove("generating");
     generateBtn.disabled = !blob;
+    regenBtn.disabled = false;
   }
-};
+}
 
 init();

@@ -44,13 +44,19 @@
         </label>
       </div>
       <button id="generateBtn" class="btn primary" disabled>Generate beat</button>
+      <label class="check"><input id="stems" type="checkbox" /> Export separate stems (drums / bass / pads)</label>
     </section>
 
     <section id="resultCard" class="card result" hidden>
       <div class="step"><span class="num">3</span><h2>Your beat</h2></div>
       <p id="resultMeta" class="meta"></p>
       <audio id="beat" controls></audio>
-      <a id="download" class="btn ghost" download="hummify-beat.wav">Download WAV</a>
+      <div class="row between">
+        <a id="download" class="btn ghost" download="hummify-beat.wav">Download WAV</a>
+        <button id="regenBtn" class="btn ghost">Regenerate</button>
+      </div>
+      <ol id="versions" class="versions"></ol>
+      <div id="stemLinks" class="chips stems" hidden></div>
     </section>
 
     <details class="card details">

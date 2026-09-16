@@ -57,3 +57,60 @@ def test_audio_serves_wav_and_rejects_traversal():
         assert client.get("/api/audio/nope.wav").status_code == 404
     finally:
         (GENERATED_DIR / name).unlink(missing_ok=True)
+
+
+def _gen_bytes(seed=None):
+    files = {"file": ("hum.wav", make_wav(), "audio/wav")}
+    data = {"style": "hip-hop"}
+    if seed is not None:
+        data["seed"] = str(seed)
+    body = client.post("/api/generate", files=files, data=data).json()
+    name = body["audio_url"].rsplit("/", 1)[-1]
+    try:
+        return body["seed"], client.get(f"/api/audio/{name}").content
+    finally:
+        (GENERATED_DIR / name).unlink(missing_ok=True)
+
+
+def test_same_seed_same_audio():
+    s1, a = _gen_bytes(42)
+    s2, b = _gen_bytes(42)
+    assert s1 == s2 == 42
+    assert a == b
+
+
+def test_different_seeds_differ():
+    _, a = _gen_bytes(1)
+    _, b = _gen_bytes(2)
+    assert a != b
+
+
+def test_no_seed_assigns_one():
+    seed, _ = _gen_bytes()
+    assert isinstance(seed, int) and 0 <= seed < 2**31
+
+
+def test_stems_export():
+    files = {"file": ("hum.wav", make_wav(), "audio/wav")}
+    body = client.post("/api/generate", files=files, data={"style": "pop", "stems": "true"}).json()
+    assert set(body["stems"]) == {"drums", "bass", "pads"}
+    names = [body["audio_url"].rsplit("/", 1)[-1]]
+    try:
+        for name, url in body["stems"].items():
+            fname = url.rsplit("/", 1)[-1]
+            names.append(fname)
+            r = client.get(url)
+            assert r.status_code == 200
+            assert r.headers["content-type"] == "audio/wav"
+            assert r.content[:4] == b"RIFF"
+        assert body["stems"]["drums"] != body["stems"]["bass"]
+    finally:
+        for n in names:
+            (GENERATED_DIR / n).unlink(missing_ok=True)
+
+
+def test_no_stems_by_default():
+    files = {"file": ("hum.wav", make_wav(), "audio/wav")}
+    body = client.post("/api/generate", files=files, data={"style": "pop"}).json()
+    assert "stems" not in body
+    (GENERATED_DIR / body["audio_url"].rsplit("/", 1)[-1]).unlink(missing_ok=True)
