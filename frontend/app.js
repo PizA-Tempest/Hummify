@@ -164,6 +164,7 @@ async function requestSong(seed) {
     const url = new URL(data.audio_url, `${API}/`).href;
     songMeta.textContent = `${data.title} · ${data.style} · ${data.tempo_bpm} BPM · ${data.duration_s}s · ${data.total_bars} bars · seed ${data.seed}`;
     songEl.src = url;
+    songEl.play().catch(() => {}); // browsers may require pressing play manually
     songDownload.href = url;
     songDownload.download = `hummify-song-v${data.seed}.wav`;
     songStruct.textContent = data.structure.map(s => `${s.name} ${s.bars} bars`).join(" → ");
@@ -211,6 +212,7 @@ async function requestBeat(seed) {
     const url = new URL(data.audio_url, `${API}/`).href;
     resultMeta.textContent = `v${versionCount} · ${data.style} · ${data.tempo_bpm} BPM · ${data.duration_s}s · seed ${data.seed}`;
     beat.src = url;
+    beat.play().catch(() => {}); // browsers may require pressing play manually
     download.href = url;
     download.download = `hummify-${data.style}-v${versionCount}.wav`;
     const li = document.createElement("li");
