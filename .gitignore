@@ -1,0 +1,8 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+generated/*.wav
+generated/*.mp3
+generated/*.ogg
+!generated/.gitkeep
