@@ -1,8 +1,9 @@
 """Rule-based beat synthesis (numpy, no ML weights).
 
-Renders a 4-bar loop to `generated/beat_<id>.wav`:
+Renders an 8-bar loop to `generated/beat_<id>.wav`:
 drums (kick/snare/hat synths) + bass following the detected melody roots
-+ chord pads. Style presets change pattern, tempo default, swing and mix.
++ chord pads, with a crash on the downbeat and a snare fill in the last
+bar. Style presets change pattern, tempo default, swing and mix.
 Real ML model code can later replace `render()` — keep `generate_beat`
 signature and the `audio_url` contract.
 """
@@ -17,7 +18,7 @@ import numpy as np
 SUPPORTED_STYLES = ["lo-fi", "hip-hop", "pop", "r&b", "rock", "edm", "jazz", "ambient"]
 
 SR = 44100
-BARS = 4
+BARS = 8
 BEATS_PER_BAR = 4
 STEPS_PER_BAR = 16  # 16th notes
 
@@ -147,6 +148,17 @@ def _render_all(melody: dict, style: str, bpm: int, seed: int) -> tuple[np.ndarr
     for bar in range(BARS):
         bar_start = bar * BEATS_PER_BAR * beat
         root = roots[bar]
+        if bar == 0:  # crash on the downbeat
+            n = int(SR * 1.0)
+            t = np.arange(n) / SR
+            hp = np.diff(rng.standard_normal(n), prepend=0.0)
+            _add(drums, (hp * np.exp(-t * 4.0) * 0.5).astype(np.float32),
+                 int(bar_start * SR), 0.6 * p["drums"])
+        # snare fill across the second half of the last bar
+        if bar == BARS - 1:
+            for k, s in enumerate(range(8, 16, 2)):
+                _add(drums, _snare(rng), int((bar_start + s * step_dur) * SR),
+                     (0.25 + 0.45 * k / 3) * p["drums"])
         # --- pads: root + third + fifth, whole bar ---
         for iv in (0, third, 7):
             sig = _tone(_midi_to_freq(root + 12 + iv), BEATS_PER_BAR * beat, "sine", decay=1.2)

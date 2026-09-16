@@ -114,3 +114,12 @@ def test_no_stems_by_default():
     body = client.post("/api/generate", files=files, data={"style": "pop"}).json()
     assert "stems" not in body
     (GENERATED_DIR / body["audio_url"].rsplit("/", 1)[-1]).unlink(missing_ok=True)
+
+
+def test_beat_is_not_a_clip():
+    files = {"file": ("hum.wav", make_wav(), "audio/wav")}
+    body = client.post("/api/generate", files=files, data={"style": "lo-fi"}).json()
+    try:
+        assert body["duration_s"] > 8  # 8-bar loop, never a seconds-long clip
+    finally:
+        (GENERATED_DIR / body["audio_url"].rsplit("/", 1)[-1]).unlink(missing_ok=True)

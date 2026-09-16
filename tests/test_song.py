@@ -38,7 +38,7 @@ def test_song_short_renders_with_vocals_and_stems():
     assert body["total_bars"] == 6
     assert [s["name"] for s in body["structure"]] == ["intro", "verse", "chorus", "outro"]
     assert "vocals" in body["tracks"]
-    assert set(body["stems"]) == {"drums", "bass", "pads", "vocals"}
+    assert set(body["stems"]) == {"drums", "bass", "pads", "lead", "vocals"}
     assert "midnight" in body["lyrics"]["text"].lower() or "rain" in body["lyrics"]["text"].lower() or body["lyrics"]["title"]
     names = [body["audio_url"].rsplit("/", 1)[-1]] + [u.rsplit("/", 1)[-1] for u in body["stems"].values()]
     try:
@@ -74,3 +74,29 @@ def test_song_same_seed_same_audio():
 def test_song_rejects_empty_with_no_hum():
     r = client.post("/api/song", data={"prompt": "", "song_length": "short"})
     assert r.status_code == 400
+
+
+def test_song_full_is_long_with_bridge_and_finale():
+    r = client.post("/api/song", data={
+        "prompt": "sad lo-fi midnight rain", "song_length": "full", "seed": "3"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    try:
+        assert body["total_bars"] == 48
+        assert [s["name"] for s in body["structure"]] == [
+            "intro", "verse", "chorus", "verse", "chorus", "bridge", "chorus", "outro"]
+        assert body["duration_s"] > 60  # a real full-length song, never a seconds-long clip
+        assert "lead" in body["tracks"] and "vocals" in body["tracks"]
+    finally:
+        _cleanup(body["audio_url"].rsplit("/", 1)[-1])
+
+
+def test_song_short_is_not_a_clip():
+    r = client.post("/api/song", data={
+        "prompt": "happy pop summer", "song_length": "short", "seed": "5"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    try:
+        assert body["duration_s"] > 8
+    finally:
+        _cleanup(body["audio_url"].rsplit("/", 1)[-1])
