@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.generation.generator import GENERATED_DIR, SUPPORTED_STYLES, generate_beat
+from backend.generation.song import compose_song
 from backend.melody.extraction import analyze_melody
 
 router = APIRouter()
@@ -46,6 +47,48 @@ async def generate(
     try:
         melody = analyze_melody(data)
         return generate_beat(melody, style, tempo, mood, seed, stems)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/song")
+async def song(
+    prompt: str = Form(default=""),
+    file: UploadFile | None = File(default=None),
+    style: str | None = Form(default=None),
+    tempo: int | None = Form(default=None),
+    mood: str | None = Form(default=None),
+    seed: int | None = Form(default=None),
+    stems: bool = Form(default=False),
+    vocals: bool = Form(default=True),
+    song_length: str = Form(default="full"),
+) -> dict:
+    """Suno-lite compose: text prompt -> full structured song + lyrics.
+
+    `file` (WAV hum) is optional — when provided its melody guides the
+    chord roots; otherwise the prompt seeds a progression.
+    `song_length`: "full" (~36 bars) or "short" (6 bars, fast preview/tests).
+    """
+    melody = None
+    if file is not None:
+        data = await file.read()
+        if data:
+            try:
+                melody = analyze_melody(data)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+    try:
+        return compose_song(
+            prompt=prompt,
+            style=style or None,
+            tempo=tempo,
+            mood=mood or None,
+            seed=seed,
+            stems=stems,
+            vocals=vocals,
+            song_length=song_length,
+            melody=melody,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

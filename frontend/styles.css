@@ -95,11 +95,24 @@ body {
 .field { display: grid; gap: 8px; font-size: 12px; font-weight: 650; color: var(--muted); }
 .field span { font-weight: 600; }
 .field output { font-variant-numeric: tabular-nums; color: var(--ink); }
-select, input[type="text"] {
+select, input[type="text"], textarea {
   font: inherit; color: var(--ink);
   border: 1px solid var(--line); border-radius: 10px;
   padding: 10px 12px; background: #fff; width: 100%;
 }
+textarea { resize: vertical; margin-bottom: 12px; }
+.song-opts { align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.song-opts .check { margin-top: 0; }
+.field.inline { min-width: 170px; }
+.lyrics {
+  margin: 12px 0 0; padding: 14px;
+  background: #101010; color: #d7d7d7;
+  border-radius: 10px; font-size: 12.5px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 260px; overflow: auto;
+}
+.structure { margin-top: 10px; }
+#song { margin: 8px 0 12px; }
 input[type="range"] { width: 100%; accent-color: var(--ink); }
 select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible {
   outline: 2px solid var(--ink); outline-offset: 2px;

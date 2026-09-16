@@ -47,6 +47,34 @@
       <label class="check"><input id="stems" type="checkbox" /> Export separate stems (drums / bass / pads)</label>
     </section>
 
+    <section class="card">
+      <div class="step"><span class="num">✦</span><h2>Compose from prompt (Suno-style)</h2></div>
+      <p class="hint">No humming needed — describe the song. Uses the style / tempo / mood above unless the prompt says otherwise (e.g. “dark edm night drive”).</p>
+      <label class="field">Prompt
+        <textarea id="prompt" rows="2" placeholder="sad lo-fi piano, midnight rain, slow heartbeat…"></textarea>
+      </label>
+      <div class="row song-opts">
+        <label class="check"><input id="vocalsBox" type="checkbox" checked /> Sung lyric lead</label>
+        <label class="field inline">Length
+          <select id="songLength">
+            <option value="full">Full (~1.5 min)</option>
+            <option value="short">Short preview (~15 s)</option>
+          </select>
+        </label>
+      </div>
+      <button id="composeBtn" class="btn primary">Compose song</button>
+      <div id="songResult" hidden>
+        <p id="songMeta" class="meta"></p>
+        <audio id="song" controls></audio>
+        <div class="row between">
+          <a id="songDownload" class="btn ghost">Download WAV</a>
+          <button id="songRemixBtn" class="btn ghost">Remix</button>
+        </div>
+        <p id="songStruct" class="meta structure"></p>
+        <pre id="lyrics" class="lyrics"></pre>
+      </div>
+    </section>
+
     <section id="resultCard" class="card result" hidden>
       <div class="step"><span class="num">3</span><h2>Your beat</h2></div>
       <p id="resultMeta" class="meta"></p>

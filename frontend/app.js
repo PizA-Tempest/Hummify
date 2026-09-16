@@ -9,6 +9,10 @@ const output = $("output"), banner = $("banner"), status = $("apiStatus");
 const resultCard = $("resultCard"), resultMeta = $("resultMeta"), recTimer = $("recTimer");
 const regenBtn = $("regenBtn"), versions = $("versions");
 const stemsBox = $("stems"), stemLinks = $("stemLinks");
+const promptEl = $("prompt"), composeBtn = $("composeBtn"), songEl = $("song");
+const songResult = $("songResult"), songMeta = $("songMeta"), lyricsEl = $("lyrics");
+const songStruct = $("songStruct"), songDownload = $("songDownload");
+const songRemixBtn = $("songRemixBtn"), vocalsBox = $("vocalsBox"), songLength = $("songLength");
 
 let blob = null, lastWav = null, selectedStyle = null, timerId = null, timerStart = 0;
 let versionCount = 0;
@@ -104,6 +108,63 @@ stopBtn.onclick = async () => {
 };
 
 tempo.oninput = () => { tempoVal.value = tempo.value; };
+
+composeBtn.onclick = () => requestSong(null);
+songRemixBtn.onclick = () => requestSong(Math.floor(Math.random() * 2 ** 31));
+
+async function requestSong(seed) {
+  clearError();
+  const prompt = promptEl.value.trim();
+  if (!prompt && !blob) {
+    showError("Describe your song first — or record a hum to guide it.");
+    return;
+  }
+  composeBtn.disabled = true;
+  songRemixBtn.disabled = true;
+  document.body.classList.add("generating");
+  try {
+    const fd = new FormData();
+    fd.append("prompt", prompt || "hummed melody");
+    if (blob) {
+      const wav = lastWav ?? await blobToWav(blob);
+      lastWav = wav;
+      fd.append("file", wav, "hum.wav");
+    }
+    fd.append("style", selectedStyle);
+    fd.append("tempo", tempo.value);
+    fd.append("mood", mood.value);
+    if (seed !== null) fd.append("seed", seed);
+    fd.append("stems", stemsBox.checked);
+    fd.append("vocals", vocalsBox.checked);
+    fd.append("song_length", songLength.value);
+    let res;
+    try {
+      res = await fetch(`${API}/song`, { method: "POST", body: fd });
+    } catch {
+      showError("Can't reach the backend. Start it with: uvicorn backend.app:app --reload.");
+      return;
+    }
+    const data = await res.json();
+    output.textContent = JSON.stringify(data, null, 2);
+    if (!res.ok) {
+      showError(`Backend error: ${data.detail ?? res.status}`);
+      return;
+    }
+    const url = new URL(data.audio_url, `${API}/`).href;
+    songMeta.textContent = `${data.title} · ${data.style} · ${data.tempo_bpm} BPM · ${data.duration_s}s · ${data.total_bars} bars · seed ${data.seed}`;
+    songEl.src = url;
+    songDownload.href = url;
+    songDownload.download = `hummify-song-v${data.seed}.wav`;
+    songStruct.textContent = data.structure.map(s => `${s.name} ${s.bars} bars`).join(" → ");
+    lyricsEl.textContent = data.lyrics.text;
+    songResult.hidden = false;
+    songResult.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } finally {
+    document.body.classList.remove("generating");
+    composeBtn.disabled = false;
+    songRemixBtn.disabled = false;
+  }
+}
 
 generateBtn.onclick = () => requestBeat(null);
 regenBtn.onclick = () => requestBeat(Math.floor(Math.random() * 2 ** 31));
