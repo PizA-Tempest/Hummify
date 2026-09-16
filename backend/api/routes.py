@@ -1,12 +1,17 @@
 """HTTP API routes."""
 from __future__ import annotations
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+import re
+from pathlib import Path
 
-from backend.generation.generator import SUPPORTED_STYLES, generate_beat
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+
+from backend.generation.generator import GENERATED_DIR, SUPPORTED_STYLES, generate_beat
 from backend.melody.extraction import analyze_melody
 
 router = APIRouter()
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*\.wav$")
 
 
 @router.get("/health")
@@ -41,3 +46,13 @@ async def generate(
         return generate_beat(melody, style, tempo, mood)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/audio/{filename}")
+def audio(filename: str):
+    if not _SAFE_NAME.match(filename):
+        raise HTTPException(status_code=400, detail="invalid filename")
+    path: Path = GENERATED_DIR / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(path, media_type="audio/wav", filename=filename)

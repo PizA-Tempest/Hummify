@@ -7,21 +7,58 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main>
-    <h1>🎵 Hummify</h1>
-    <p>Hum a melody → Choose a style → Get a beat</p>
-    <section>
-      <button id="recordBtn">● Record</button>
-      <button id="stopBtn" disabled>■ Stop</button>
+  <main class="wrap">
+    <header class="hero">
+      <div class="logo" aria-hidden="true">~</div>
+      <div>
+        <h1>Hummify</h1>
+        <p class="tagline">Hum a melody, pick a style, get a beat.</p>
+      </div>
+      <span id="apiStatus" class="status" data-state="checking">connecting…</span>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <section class="card">
+      <div class="step"><span class="num">1</span><h2>Record your melody</h2><span id="recTimer" class="timer" hidden>0:00</span></div>
+      <div class="row">
+        <button id="recordBtn" class="btn record"><span class="dot" aria-hidden="true"></span>Record</button>
+        <button id="stopBtn" class="btn ghost" disabled>Stop</button>
+      </div>
       <audio id="preview" controls></audio>
+      <p class="hint">Hum or sing for a few seconds, then press Stop.</p>
     </section>
-    <section>
-      <label>Style <select id="style"></select></label>
-      <label>Tempo <input id="tempo" type="number" value="90" min="60" max="180" /></label>
-      <label>Mood <input id="mood" type="text" value="chill" /></label>
-      <button id="generateBtn" disabled>Generate Beat</button>
+
+    <section class="card">
+      <div class="step"><span class="num">2</span><h2>Pick a style</h2></div>
+      <div id="style" class="chips" role="radiogroup" aria-label="Music style"></div>
+      <div class="controls">
+        <label class="field">Tempo <span><output id="tempoVal" for="tempo">90</output> BPM</span>
+          <input id="tempo" type="range" min="60" max="180" value="90" />
+        </label>
+        <label class="field">Mood
+          <select id="mood">
+            <option>chill</option><option>smooth</option><option>dark</option>
+            <option>bright</option><option>energetic</option><option>driving</option>
+          </select>
+        </label>
+      </div>
+      <button id="generateBtn" class="btn primary" disabled>Generate beat</button>
     </section>
-    <pre id="output"></pre>
+
+    <section id="resultCard" class="card result" hidden>
+      <div class="step"><span class="num">3</span><h2>Your beat</h2></div>
+      <p id="resultMeta" class="meta"></p>
+      <audio id="beat" controls></audio>
+      <a id="download" class="btn ghost" download="hummify-beat.wav">Download WAV</a>
+    </section>
+
+    <details class="card details">
+      <summary>Technical details</summary>
+      <pre id="output">Ready.</pre>
+    </details>
+
+    <footer class="foot">Hummify · your melody, your style, your beat</footer>
   </main>
   <script type="module" src="./app.js"></script>
 </body>
