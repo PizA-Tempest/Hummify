@@ -6,7 +6,7 @@
 - Install: `pip install -r requirements.txt`
 - Run API: `uvicorn backend.app:app --reload` (routes under `/api`: `GET /health`, `GET /styles`, `POST /analyze`, `POST /generate`, `GET /audio/{file}.wav`)
 - Test: `python -m pytest tests -q`
-- Serve frontend: open `frontend/index.html` directly, or `python -m http.server -d frontend 5500` (API must run on `127.0.0.1:8000` — URL is hardcoded as `API` in `frontend/app.js`)
+- Serve frontend: open `frontend/index.html` directly, or `python -m http.server -d frontend 5500` (API must run on `127.0.0.1:8000` — `frontend/app.js` uses same-origin `/api` in production but falls back to `127.0.0.1:8000` for `file://`/`:5500` local dev). The FastAPI app also serves `frontend/` at `/` (one-service deploy, see `render.yaml`).
 
 ## Architecture
 - `backend/app.py` is the entrypoint; `backend/api/routes.py` owns HTTP layer.

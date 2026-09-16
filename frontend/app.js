@@ -1,6 +1,17 @@
 import { blobToWav, createRecorder } from "./components/recorder.js";
 
-const API = "http://127.0.0.1:8000/api";
+// Domain-agnostic API base: same-origin /api in production (one-service
+// deploy), local-backend fallback for `file://` or :5500 dev servers.
+const API = (() => {
+  try {
+    if (location.protocol === "file:" || location.port === "5500") {
+      return "http://127.0.0.1:8000/api";
+    }
+    return `${location.origin}/api`;
+  } catch {
+    return "http://127.0.0.1:8000/api";
+  }
+})();
 const $ = id => document.getElementById(id);
 const recordBtn = $("recordBtn"), stopBtn = $("stopBtn"), generateBtn = $("generateBtn");
 const preview = $("preview"), beat = $("beat"), download = $("download");
